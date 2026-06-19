@@ -8,6 +8,7 @@
  *   node scripts/install-commandcode.js            # normal (skip existing)
  *   node scripts/install-commandcode.js --force    # overwrite existing
  *   node scripts/install-commandcode.js --dry-run  # preview only
+ *   node scripts/install-commandcode.js --global-rules  # COMMANDCODE.md to ~/.commandcode/
  *   node scripts/install-commandcode.js --help
  */
 
@@ -20,10 +21,10 @@ const ECC_ROOT = path.resolve(__dirname, '..');
 const CC_SKILLS_DIR = path.join(os.homedir(), '.commandcode', 'skills');
 const CC_AGENTS_DIR = path.join(os.homedir(), '.commandcode', 'agents');
 
-// Rules output: write to .commandcode/COMMANDCODE.md relative to CWD
-// So it works wherever the user runs the script (macOS, Windows, Linux)
-const CC_RULES_DIR = path.join(process.cwd(), '.commandcode');
-const CC_RULES_FILE = path.join(process.cwd(), '.commandcode', 'COMMANDCODE.md');
+// Rules output: default to project .commandcode/COMMANDCODE.md (CWD-based).
+// Use --global-rules to write to ~/.commandcode/ (user scope, install once for all projects).
+const CC_RULES_FILE_DEFAULT = path.join(process.cwd(), '.commandcode', 'COMMANDCODE.md');
+const CC_RULES_FILE_GLOBAL = path.join(os.homedir(), '.commandcode', 'COMMANDCODE.md');
 
 const DEDUP_SOURCE = path.join(ECC_ROOT, '.agents', 'skills');
 const SKILLS_SOURCE = path.join(ECC_ROOT, 'skills');
@@ -33,7 +34,7 @@ const COMMANDS_SOURCE = path.join(ECC_ROOT, 'commands');
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
-const FLAGS = { force: false, dryRun: false };
+const FLAGS = { force: false, dryRun: false, globalRules: false };
 
 for (const arg of args) {
   if (arg === '--help' || arg === '-h') {
@@ -43,16 +44,17 @@ ECC → Command Code Installer
 Installs ECC components into Command Code format.
 
 Usage:
-  node scripts/install-commandcode.js            # skip existing
-  node scripts/install-commandcode.js --force    # overwrite existing
-  node scripts/install-commandcode.js --dry-run  # preview only
+  node scripts/install-commandcode.js              # skip existing
+  node scripts/install-commandcode.js --force      # overwrite existing
+  node scripts/install-commandcode.js --dry-run    # preview only
+  node scripts/install-commandcode.js --global-rules  # rules to ~/.commandcode/
   node scripts/install-commandcode.js --help
 
 What it does:
   • Converts 67 ECC agents → ~/.commandcode/agents/ecc-*.md
   • Copies 271 ECC skills → ~/.commandcode/skills/<name>/
   • Skips 92 ECC commands (not supported by Command Code)
-  • Merges 10 rules into .commandcode/COMMANDCODE.md (in current dir)
+  • Merges 10 rules → .commandcode/COMMANDCODE.md (project) or ~/.commandcode/ (--global-rules)
 
 Works on macOS, Windows, and Linux.
 `);
@@ -60,6 +62,7 @@ Works on macOS, Windows, and Linux.
   }
   if (arg === '--force') FLAGS.force = true;
   if (arg === '--dry-run') FLAGS.dryRun = true;
+  if (arg === '--global-rules') FLAGS.globalRules = true;
 }
 
 // ── Utilities ───────────────────────────────────────────────────────────────
@@ -434,9 +437,11 @@ if (fs.existsSync(RULES_SOURCE)) {
     '',
   ].join(EOL);
 
-  writeFile(CC_RULES_FILE, fullContent);
+  const rulesFile = FLAGS.globalRules ? CC_RULES_FILE_GLOBAL : CC_RULES_FILE_DEFAULT;
+  writeFile(rulesFile, fullContent);
   stats.rules = loadedCount;
-  log(`Rules: ${loadedCount} files merged → COMMANDCODE.md`);
+  const scope = FLAGS.globalRules ? '~/.commandcode/' : '.commandcode/ (project)';
+  log(`Rules: ${loadedCount} files merged → COMMANDCODE.md (${scope})`);
 } else {
   log(`  ⚠ Rules source not found: ${RULES_SOURCE}`);
 }
@@ -468,7 +473,8 @@ console.log(`Mode:               ${FLAGS.dryRun ? 'DRY-RUN (no files written)' :
 console.log('');
 console.log(`Skills:   ${CC_SKILLS_DIR}`);
 console.log(`Agents:   ${CC_AGENTS_DIR}/ecc-*.md`);
-console.log(`Rules:    ${CC_RULES_FILE}`);
+const rulesPath = FLAGS.globalRules ? CC_RULES_FILE_GLOBAL : CC_RULES_FILE_DEFAULT;
+console.log(`Rules:    ${rulesPath}`);
 console.log('');
 if (!FLAGS.dryRun) {
   console.log('Done! Start a Command Code session to see the installed components.');
